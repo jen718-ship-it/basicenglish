@@ -1,0 +1,1003 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Speaking Blocks</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Fredoka+One&family=Quicksand:wght@500;700&display=swap');
+
+        body {
+            font-family: 'Quicksand', sans-serif;
+            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        .tile-frame {
+            box-shadow: 0 6px 0 rgba(0,0,0,0.12), 0 10px 15px rgba(0,0,0,0.08);
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .tile-frame:hover {
+            transform: translateY(-3px) scale(1.03);
+            box-shadow: 0 10px 0 rgba(0,0,0,0.12), 0 14px 20px rgba(0,0,0,0.12);
+        }
+
+        .tile-frame:active {
+            transform: translateY(2px) scale(0.97);
+            box-shadow: 0 3px 0 rgba(0,0,0,0.12), 0 4px 6px rgba(0,0,0,0.08);
+        }
+
+        .draggable-tile {
+            touch-action: none;
+            position: absolute;
+            cursor: grab;
+            filter: drop-shadow(0px 8px 12px rgba(0,0,0,0.18));
+            transition: transform 0.1s ease;
+        }
+
+        .draggable-tile:active {
+            cursor: grabbing;
+            transform: scale(1.05);
+            z-index: 10000 !important;
+        }
+
+        .board-pattern {
+            background-color: #ffffff;
+            background-image: radial-gradient(#ffd166 2.5px, transparent 2.5px), radial-gradient(#06d6a0 2.5px, #ffffff 2.5px);
+            background-size: 80px 80px;
+            background-position: 0 0, 40px 40px;
+            border: 6px dashed #ffd166;
+        }
+
+        .trash-zone {
+            transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .trash-zone.drag-over {
+            transform: scale(1.2);
+            background-color: #ef476f !important;
+            color: #ffffff !important;
+            border-color: #ffb703 !important;
+            box-shadow: 0 0 25px rgba(239, 71, 111, 0.6);
+        }
+
+        .sidebar-scroll::-webkit-scrollbar {
+            width: 8px;
+        }
+        .sidebar-scroll::-webkit-scrollbar-track {
+            background: rgba(255,255,255,0.4);
+            border-radius: 10px;
+        }
+        .sidebar-scroll::-webkit-scrollbar-thumb {
+            background: #ffd166;
+            border-radius: 10px;
+            border: 2px solid #ffffff;
+        }
+
+        .letter-tile {
+            font-family: "Comic Sans MS", "Comic Sans", cursive, sans-serif !important;
+            font-weight: bold;
+        }
+
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-8px); }
+            40%, 80% { transform: translateX(8px); }
+        }
+
+        .animate-shake {
+            animation: shake 0.4s ease-in-out;
+        }
+
+        .resize-handle {
+            position: absolute;
+            right: -6px;
+            bottom: -6px;
+            width: 22px;
+            height: 22px;
+            background-color: #3b82f6;
+            border: 2px solid #ffffff;
+            border-radius: 50%;
+            cursor: se-resize;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            z-index: 30;
+            touch-action: none;
+        }
+
+        .resize-handle:hover {
+            transform: scale(1.2);
+            background-color: #2563eb;
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex flex-col overflow-hidden p-3 md:p-4 gap-3">
+
+    <!-- Header -->
+    <header class="w-full bg-white/90 backdrop-blur-md rounded-2xl md:rounded-3xl px-4 py-3 shadow-lg border-4 border-white flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-2">
+            <span class="text-2xl md:text-3xl animate-bounce">🎨</span>
+            <h1 class="text-xl md:text-2xl font-black text-slate-700 font-['Fredoka_One']">Speaking Blocks</h1>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <button id="quizToggleBtn" title="Quiz Mode" class="bg-purple-500 hover:bg-purple-600 text-white px-3 md:px-4 py-2.5 rounded-2xl shadow-md active:scale-95 transition-all duration-200 border-2 border-purple-300 flex items-center gap-2 font-bold text-sm md:text-base">
+                <i class="fa-solid fa-graduation-cap text-lg"></i>
+                <span class="hidden sm:inline" id="quizBtnText">Quiz Mode</span>
+            </button>
+
+            <button id="clearBoardBtn" title="Clear Board" aria-label="Clear Board" class="bg-amber-400 hover:bg-amber-500 text-white px-3 md:px-4 py-2.5 rounded-2xl shadow-md active:scale-95 transition-all duration-200 border-2 border-amber-300 flex items-center gap-2 font-bold text-sm md:text-base">
+                <i class="fa-solid fa-rotate-right text-lg"></i>
+                <span class="hidden sm:inline">Reset</span>
+            </button>
+
+            <button id="editWordsBtn" title="Edit Word Blocks" aria-label="Edit Word Blocks" class="bg-sky-500 hover:bg-sky-600 text-white w-11 h-11 rounded-2xl shadow-md active:scale-95 transition-all duration-200 border-2 border-sky-300 flex items-center justify-center">
+                <i class="fa-solid fa-pen-to-square text-lg"></i>
+            </button>
+
+            <button id="fullscreenBtn" title="Fullscreen" aria-label="Fullscreen" class="bg-slate-600 hover:bg-slate-700 text-white w-11 h-11 rounded-2xl shadow-md active:scale-95 transition-all duration-200 border-2 border-slate-400 flex items-center justify-center">
+                <i id="fullscreenIcon" class="fa-solid fa-expand text-lg"></i>
+            </button>
+        </div>
+    </header>
+
+    <!-- App Main Body -->
+    <div class="flex-1 w-full flex flex-row gap-3 md:gap-4 overflow-hidden relative">
+
+        <aside class="w-20 sm:w-24 md:w-32 bg-white/80 backdrop-blur-md rounded-2xl md:rounded-3xl p-2 md:p-3 shadow-xl border-4 border-pink-200 flex flex-col items-center shrink-0">
+            <div class="text-center pb-2 mb-2 border-b-2 border-pink-100 w-full">
+                <span class="text-xl md:text-2xl" title="Alphabet">🔤</span>
+            </div>
+            <div id="familyTilesContainer" class="w-full flex-1 flex flex-col items-center gap-3 overflow-y-auto sidebar-scroll pr-0.5"></div>
+        </aside>
+
+        <main id="boardCanvas" class="relative flex-1 rounded-2xl md:rounded-3xl board-pattern shadow-inner overflow-hidden">
+            <div id="trashZone" class="trash-zone absolute bottom-3 right-3 md:bottom-4 md:right-4 bg-red-100 text-red-500 border-4 border-red-300 w-14 h-14 md:w-16 md:h-16 rounded-2xl flex items-center justify-center shadow-lg z-10 pointer-events-none">
+                <i class="fa-solid fa-trash-can text-xl md:text-2xl"></i>
+            </div>
+        </main>
+
+        <aside class="w-20 sm:w-24 md:w-32 bg-white/80 backdrop-blur-md rounded-2xl md:rounded-3xl p-2 md:p-3 shadow-xl border-4 border-sky-200 flex flex-col items-center shrink-0">
+            <div class="text-center pb-2 mb-2 border-b-2 border-sky-100 w-full">
+                <span class="text-xl md:text-2xl" title="Words">💬</span>
+            </div>
+            <div id="otherTilesContainer" class="w-full flex-1 flex flex-col items-center gap-3 overflow-y-auto sidebar-scroll pr-0.5"></div>
+        </aside>
+
+        <!-- WORD BLOCK EDITOR -->
+        <div id="editWordsOverlay" class="hidden absolute inset-0 bg-slate-900/40 backdrop-blur-md z-[60] rounded-2xl md:rounded-3xl flex items-center justify-center p-4">
+            <div class="bg-white border-4 border-sky-300 rounded-3xl p-5 md:p-7 shadow-2xl max-w-2xl w-full max-h-[90%] flex flex-col relative">
+                <button id="closeEditWordsBtn" title="Close" aria-label="Close" class="absolute top-3 right-3 text-slate-400 hover:text-slate-600 text-xl font-bold p-2">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+                <div class="text-center pr-8">
+                    <div class="text-4xl mb-1">✏️</div>
+                    <h2 class="text-2xl md:text-3xl font-black font-['Fredoka_One'] text-slate-700">Edit Tiles</h2>
+                    <p class="text-slate-500 font-bold text-sm mt-1">Choose which tiles you want to show in each category.</p>
+                </div>
+
+                <div class="grid grid-cols-2 gap-3 mt-5">
+                    <button id="editFamilyCategoryBtn" type="button" class="edit-category-btn bg-pink-50 border-4 border-pink-300 text-pink-600 rounded-2xl p-3 font-black flex items-center justify-center gap-2 transition-all active:scale-95">
+                        <span class="text-2xl">🔤</span>
+                        <span>Alphabet</span>
+                    </button>
+                    <button id="editOtherCategoryBtn" type="button" class="edit-category-btn bg-sky-50 border-4 border-sky-300 text-sky-600 rounded-2xl p-3 font-black flex items-center justify-center gap-2 transition-all active:scale-95">
+                        <span class="text-2xl">💬</span>
+                        <span>Vocabulary</span>
+                    </button>
+                </div>
+
+                <div id="wordSelectionContainer" class="mt-4 flex-1 overflow-y-auto sidebar-scroll pr-1">
+                    <div id="wordSelectionGrid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3"></div>
+                </div>
+                <div class="flex items-center justify-between gap-3 mt-5 pt-4 border-t-2 border-slate-100">
+                    <button id="selectAllWordsBtn" class="bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-4 py-2.5 rounded-2xl shadow-md active:scale-95 transition-transform">
+                        <i class="fa-solid fa-check-double mr-1"></i> All
+                    </button>
+                    <div class="flex gap-2">
+                        <button id="cancelEditWordsBtn" class="bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold px-4 py-2.5 rounded-2xl shadow-md active:scale-95 transition-transform">Cancel</button>
+                        <button id="saveEditWordsBtn" class="bg-sky-500 hover:bg-sky-600 text-white font-bold px-5 py-2.5 rounded-2xl shadow-md active:scale-95 transition-transform">
+                            <i class="fa-solid fa-floppy-disk mr-1"></i> Save
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- QUIZ OVERLAY -->
+        <div id="quizOverlay" class="hidden absolute inset-0 bg-slate-900/40 backdrop-blur-md z-50 rounded-2xl md:rounded-3xl flex items-center justify-center p-4">
+            
+            <div class="bg-white border-4 border-purple-300 rounded-3xl p-6 md:p-8 shadow-2xl max-w-lg w-full flex flex-col items-center text-center relative animate-fade-in">
+                
+                <button id="closeQuizBtn" class="absolute top-4 right-4 text-slate-400 hover:text-slate-600 text-xl font-bold p-1">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+
+                <!-- STEP 1: Quiz Configuration Screen -->
+                <div id="quizCategoryState" class="w-full flex flex-col items-center gap-4">
+                    <div class="text-4xl">🧩</div>
+                    <h2 class="text-2xl font-black font-['Fredoka_One'] text-slate-700">Quiz Settings</h2>
+                    
+                    <!-- Select Length -->
+                    <div class="w-full bg-purple-50 p-3 rounded-2xl border-2 border-purple-100">
+                        <label class="block text-slate-600 font-bold text-xs uppercase tracking-wider mb-2">Number of Questions:</label>
+                        <div class="flex justify-center gap-3">
+                            <button id="quizItems5Btn" onclick="setQuizItemCount(5)" class="quiz-item-btn flex-1 py-2 rounded-xl font-black text-sm border-2 transition-all bg-purple-500 text-white border-purple-600 shadow-sm">5 Items</button>
+                            <button id="quizItems10Btn" onclick="setQuizItemCount(10)" class="quiz-item-btn flex-1 py-2 rounded-xl font-black text-sm border-2 transition-all bg-white text-purple-600 border-purple-200 hover:bg-purple-100">10 Items</button>
+                        </div>
+                    </div>
+
+                    <p class="text-slate-500 font-bold text-sm">Select Category to Start:</p>
+                    
+                    <div class="flex flex-col sm:flex-row gap-4 w-full">
+                        <button onclick="selectQuizCategory('family')" class="flex-1 bg-pink-50 hover:bg-pink-100 border-4 border-pink-300 rounded-2xl p-4 flex flex-col items-center gap-2 transition-transform active:scale-95 shadow-md">
+                            <span class="text-4xl">🔤</span>
+                            <span class="font-black text-pink-600 text-lg">Alphabet</span>
+                        </button>
+                        
+                        <button onclick="selectQuizCategory('others')" class="flex-1 bg-sky-50 hover:bg-sky-100 border-4 border-sky-300 rounded-2xl p-4 flex flex-col items-center gap-2 transition-transform active:scale-95 shadow-md">
+                            <span class="text-4xl">💬</span>
+                            <span class="font-black text-sky-600 text-lg">Vocabulary</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- STEP 2: Active Quiz Screen -->
+                <div id="quizActiveState" class="hidden w-full flex flex-col items-center gap-5">
+                    <div class="flex items-center justify-between w-full border-b-2 border-slate-100 pb-3">
+                        <span class="font-['Fredoka_One'] text-purple-600 text-lg md:text-xl" id="quizQuestionCount">Quiz Mode</span>
+                        <div class="flex items-center gap-2 text-amber-500 font-bold text-sm bg-amber-50 px-3 py-1 rounded-full border border-amber-200">
+                            <i class="fa-solid fa-flag-checkered"></i>
+                            <span id="quizRemainingText">0 Remaining</span>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col items-center gap-2">
+                        <p class="text-slate-600 font-bold text-sm md:text-base">Listen & choose the matching block:</p>
+                        <button id="playQuizSoundBtn" class="bg-purple-500 hover:bg-purple-600 text-white w-20 h-20 md:w-24 md:h-24 rounded-full flex items-center justify-center shadow-lg active:scale-95 transition-all text-3xl md:text-4xl border-4 border-purple-200">
+                            <i class="fa-solid fa-volume-high animate-pulse"></i>
+                        </button>
+                    </div>
+
+                    <div id="quizChoicesContainer" class="grid grid-cols-3 gap-3 md:gap-4 w-full pt-2"></div>
+                </div>
+
+                <!-- STEP 3: Quiz Results Screen -->
+                <div id="quizResultState" class="hidden w-full flex flex-col items-center gap-4 py-4">
+                    <div class="text-5xl md:text-6xl animate-bounce">🎉</div>
+                    <h2 class="text-2xl md:text-3xl font-black font-['Fredoka_One'] text-slate-700">Quiz Mastered!</h2>
+                    <p class="text-slate-600 font-bold text-base" id="quizScoreText">You answered every item correctly!</p>
+                    
+                    <button id="restartQuizBtn" class="mt-2 bg-emerald-500 hover:bg-emerald-600 text-white font-bold px-6 py-3 rounded-2xl shadow-lg border-2 border-emerald-300 active:scale-95 transition-transform text-base md:text-lg flex items-center gap-2">
+                        <i class="fa-solid fa-rotate-right"></i> Play Again
+                    </button>
+                </div>
+
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const UPPERCASE_LETTERS = Array.from({ length: 26 }, (_, i) => {
+            const char = String.fromCharCode(65 + i);
+            const lowerChar = String.fromCharCode(97 + i);
+            return {
+                id: `letter_upper_${char}`,
+                text: char,
+                soundWord: char,
+                audioSrc: `${char}${lowerChar} sound.mp3`,
+                color: 'bg-indigo-100 border-indigo-400 text-indigo-700',
+                isLetter: true
+            };
+        });
+
+        const LOWERCASE_LETTERS = Array.from({ length: 26 }, (_, i) => {
+            const char = String.fromCharCode(97 + i);
+            const upperChar = String.fromCharCode(65 + i);
+            return {
+                id: `letter_lower_${char}`,
+                text: char,
+                soundWord: char,
+                audioSrc: `${upperChar}${char} sound.mp3`,
+                color: 'bg-teal-100 border-teal-400 text-teal-700',
+                isLetter: true
+            };
+        });
+
+        const FAMILY_TILES = [
+            ...UPPERCASE_LETTERS,
+            ...LOWERCASE_LETTERS
+        ];
+
+        const VOCABULARY_LIST = [
+            { id: 'are', soundWord: 'are', color: 'bg-blue-100 border-blue-400' },
+            { id: 'fine', soundWord: 'fine', color: 'bg-yellow-100 border-yellow-400' },
+            { id: 'good', soundWord: 'good', color: 'bg-emerald-100 border-emerald-400' },
+            { id: 'how', soundWord: 'how', color: 'bg-rose-100 border-rose-400' },
+            { id: 'im', soundWord: "I'm", color: 'bg-indigo-100 border-indigo-400' },
+            { id: 'name', soundWord: 'name', color: 'bg-teal-100 border-teal-400' },
+            { id: 'whats', soundWord: "What's", color: 'bg-purple-100 border-purple-400' },
+            { id: 'you', soundWord: 'you', color: 'bg-sky-100 border-sky-400' },
+            { id: 'your', soundWord: 'your', color: 'bg-amber-100 border-amber-400' },
+            { id: 'period', soundWord: 'period', isPunctuation: true, img: 'period.png', color: 'bg-red-100 border-red-400' },
+            { id: 'question_mark', soundWord: 'question mark', isPunctuation: true, img: 'question mark.png', color: 'bg-orange-100 border-orange-400' }
+        ];
+
+        const OTHER_TILES = VOCABULARY_LIST.map(tile => ({
+            ...tile,
+            img: tile.img || `${tile.soundWord}.png`
+        }));
+
+        const familyTilesContainer = document.getElementById('familyTilesContainer');
+        const otherTilesContainer = document.getElementById('otherTilesContainer');
+        const boardCanvas = document.getElementById('boardCanvas');
+        const clearBoardBtn = document.getElementById('clearBoardBtn');
+        const trashZone = document.getElementById('trashZone');
+        const editWordsBtn = document.getElementById('editWordsBtn');
+        const fullscreenBtn = document.getElementById('fullscreenBtn');
+        const fullscreenIcon = document.getElementById('fullscreenIcon');
+
+        const editWordsOverlay = document.getElementById('editWordsOverlay');
+        const closeEditWordsBtn = document.getElementById('closeEditWordsBtn');
+        const cancelEditWordsBtn = document.getElementById('cancelEditWordsBtn');
+        const saveEditWordsBtn = document.getElementById('saveEditWordsBtn');
+        const selectAllWordsBtn = document.getElementById('selectAllWordsBtn');
+        const wordSelectionGrid = document.getElementById('wordSelectionGrid');
+
+        const FAMILY_CACHE_KEY = 'speakingBlocks.selectedAlphabetBlocks.v9';
+        const WORDS_CACHE_KEY = 'speakingBlocks.selectedWordBlocks.v9';
+
+        let selectedFamilyIds = loadSelectedIds(FAMILY_CACHE_KEY, FAMILY_TILES);
+        let selectedWordIds = loadSelectedIds(WORDS_CACHE_KEY, OTHER_TILES);
+
+        let editCategory = 'family';
+        let pendingFamilyIds = new Set(selectedFamilyIds);
+        let pendingWordIds = new Set(selectedWordIds);
+
+        const editFamilyCategoryBtn = document.getElementById('editFamilyCategoryBtn');
+        const editOtherCategoryBtn = document.getElementById('editOtherCategoryBtn');
+
+        // Quiz DOM Elements
+        const quizToggleBtn = document.getElementById('quizToggleBtn');
+        const quizOverlay = document.getElementById('quizOverlay');
+        const closeQuizBtn = document.getElementById('closeQuizBtn');
+        const quizCategoryState = document.getElementById('quizCategoryState');
+        const quizActiveState = document.getElementById('quizActiveState');
+        const quizResultState = document.getElementById('quizResultState');
+        const quizQuestionCount = document.getElementById('quizQuestionCount');
+        const quizRemainingText = document.getElementById('quizRemainingText');
+        const playQuizSoundBtn = document.getElementById('playQuizSoundBtn');
+        const quizChoicesContainer = document.getElementById('quizChoicesContainer');
+        const quizScoreText = document.getElementById('quizScoreText');
+        const restartQuizBtn = document.getElementById('restartQuizBtn');
+
+        let highestZIndex = 10;
+
+        // Enhanced Quiz Variables
+        let selectedCategoryPool = [];
+        let quizQueue = [];
+        let totalOriginalQuestions = 5;
+        let selectedQuizLength = 5;
+        let currentTargetTile = null;
+        let isAnswerProcessing = false;
+
+        function setQuizItemCount(count) {
+            selectedQuizLength = count;
+            document.getElementById('quizItems5Btn').className = `quiz-item-btn flex-1 py-2 rounded-xl font-black text-sm border-2 transition-all ${count === 5 ? 'bg-purple-500 text-white border-purple-600 shadow-sm' : 'bg-white text-purple-600 border-purple-200 hover:bg-purple-100'}`;
+            document.getElementById('quizItems10Btn').className = `quiz-item-btn flex-1 py-2 rounded-xl font-black text-sm border-2 transition-all ${count === 10 ? 'bg-purple-500 text-white border-purple-600 shadow-sm' : 'bg-white text-purple-600 border-purple-200 hover:bg-purple-100'}`;
+        }
+
+        // Web Audio API generator for short crisp click sound
+        function playPunctuationClickSound() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(800, audioCtx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(120, audioCtx.currentTime + 0.04);
+
+                gain.gain.setValueAtTime(0.3, audioCtx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.04);
+
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.04);
+            } catch (e) {
+                // Fallback click tone
+            }
+        }
+
+        function playTileSound(wordOrTile) {
+            const tile = typeof wordOrTile === 'object'
+                ? wordOrTile
+                : [...FAMILY_TILES, ...OTHER_TILES].find(t => t.soundWord === wordOrTile || t.id === wordOrTile);
+
+            const word = tile?.soundWord ?? wordOrTile;
+
+            // Check if it's period or question mark -> play click sound instead of speech/file
+            if (tile?.isPunctuation || word === 'period' || word === 'question mark' || tile?.id === 'period' || tile?.id === 'question_mark') {
+                playPunctuationClickSound();
+                return;
+            }
+
+            if (!word && !tile?.audioSrc) return;
+
+            const audioPath = tile?.audioSrc || `${word}.mp3`;
+            const audio = new Audio(encodeURI(audioPath));
+
+            const playPromise = audio.play();
+            if (playPromise !== undefined) {
+                playPromise.catch(() => {
+                    if ('speechSynthesis' in window) {
+                        window.speechSynthesis.cancel();
+                        const utterance = new SpeechSynthesisUtterance(word);
+                        utterance.rate = 0.9;
+                        utterance.pitch = 1.1;
+                        utterance.lang = 'en-US';
+                        window.speechSynthesis.speak(utterance);
+                    }
+                });
+            }
+        }
+
+        function renderSidebarTile(tile, container) {
+            const tileBtn = document.createElement('button');
+            tileBtn.className = `tile-frame relative flex-shrink-0 w-16 h-16 sm:w-20 sm:h-20 md:w-24 md:h-24 rounded-2xl border-4 ${tile.color} p-2 bg-white flex items-center justify-center cursor-pointer active:scale-90 transition-transform`;
+            
+            if (tile.isLetter) {
+                const textSpan = document.createElement('span');
+                textSpan.className = "letter-tile text-4xl sm:text-5xl md:text-6xl leading-none pointer-events-none select-none";
+                textSpan.textContent = tile.text;
+                tileBtn.appendChild(textSpan);
+            } else if (tile.emoji) {
+                const emoji = document.createElement('span');
+                emoji.className = "text-5xl md:text-6xl leading-none pointer-events-none";
+                emoji.textContent = tile.emoji;
+                tileBtn.appendChild(emoji);
+            } else {
+                const img = document.createElement('img');
+                img.src = encodeURI(tile.img);
+                img.alt = "";
+                img.className = "w-full h-full object-contain pointer-events-none";
+                img.onerror = () => {
+                    img.src = `https://placehold.co/150x150/FFD166/333333?text=?`;
+                };
+                tileBtn.appendChild(img);
+            }
+
+            tileBtn.addEventListener('click', () => {
+                playTileSound(tile);
+                createBoardTile(tile);
+            });
+
+            container.appendChild(tileBtn);
+        }
+
+        renderSelectedFamilyTiles();
+        renderSelectedOtherTiles();
+
+        function renderSelectedFamilyTiles() {
+            familyTilesContainer.innerHTML = '';
+            FAMILY_TILES
+                .filter(tile => selectedFamilyIds.has(tile.id))
+                .forEach(tile => renderSidebarTile(tile, familyTilesContainer));
+        }
+
+        function renderSelectedOtherTiles() {
+            otherTilesContainer.innerHTML = '';
+            OTHER_TILES
+                .filter(tile => selectedWordIds.has(tile.id))
+                .forEach(tile => renderSidebarTile(tile, otherTilesContainer));
+        }
+
+        function loadSelectedIds(cacheKey, tileList) {
+            try {
+                const saved = localStorage.getItem(cacheKey);
+                if (!saved) return new Set(tileList.map(tile => tile.id));
+                const ids = JSON.parse(saved);
+                const valid = new Set(
+                    Array.isArray(ids)
+                        ? ids.filter(id => tileList.some(tile => tile.id === id))
+                        : []
+                );
+                return valid.size ? valid : new Set(tileList.map(tile => tile.id));
+            } catch (error) {
+                return new Set(tileList.map(tile => tile.id));
+            }
+        }
+
+        function saveSelectedIds(cacheKey, ids) {
+            try {
+                localStorage.setItem(cacheKey, JSON.stringify([...ids]));
+            } catch (error) {}
+        }
+
+        function getEditorTiles() {
+            return editCategory === 'family' ? FAMILY_TILES : OTHER_TILES;
+        }
+
+        function getPendingIds() {
+            return editCategory === 'family' ? pendingFamilyIds : pendingWordIds;
+        }
+
+        function setPendingIds(ids) {
+            if (editCategory === 'family') pendingFamilyIds = ids;
+            else pendingWordIds = ids;
+        }
+
+        function openWordEditor() {
+            pendingFamilyIds = new Set(selectedFamilyIds);
+            pendingWordIds = new Set(selectedWordIds);
+            editCategory = 'family';
+            updateEditCategoryButtons();
+            renderWordSelection();
+            editWordsOverlay.classList.remove('hidden');
+        }
+
+        function closeWordEditor() {
+            editWordsOverlay.classList.add('hidden');
+        }
+
+        function updateEditCategoryButtons() {
+            const familyActive = editCategory === 'family';
+
+            editFamilyCategoryBtn.classList.toggle('ring-4', familyActive);
+            editFamilyCategoryBtn.classList.toggle('ring-pink-100', familyActive);
+            editFamilyCategoryBtn.classList.toggle('opacity-60', !familyActive);
+
+            editOtherCategoryBtn.classList.toggle('ring-4', !familyActive);
+            editOtherCategoryBtn.classList.toggle('ring-sky-100', !familyActive);
+            editOtherCategoryBtn.classList.toggle('opacity-60', familyActive);
+        }
+
+        function renderWordSelection() {
+            wordSelectionGrid.innerHTML = '';
+            const tiles = getEditorTiles();
+            const pendingIds = getPendingIds();
+
+            tiles.forEach(tile => {
+                const label = document.createElement('label');
+                label.className = 'cursor-pointer select-none';
+                const checked = pendingIds.has(tile.id);
+
+                let visual = '';
+                if (tile.isLetter) {
+                    visual = `<span class="letter-tile text-4xl sm:text-5xl font-bold leading-none select-none">${tile.text}</span>`;
+                } else if (tile.emoji) {
+                    visual = `<span class="text-4xl leading-none">${tile.emoji}</span>`;
+                } else {
+                    visual = `<img src="${encodeURI(tile.img)}" alt="" class="w-full h-full object-contain pointer-events-none">`;
+                }
+
+                label.innerHTML = `
+                    <input type="checkbox" value="${tile.id}" class="sr-only word-select-checkbox" ${checked ? 'checked' : ''}>
+                    <div class="word-choice border-4 rounded-2xl p-2 bg-white shadow-sm flex flex-col items-center gap-1 transition-all ${checked ? 'border-sky-400 ring-4 ring-sky-100' : 'border-slate-200 opacity-55'}">
+                        <div class="w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center">${visual}</div>
+                        <span class="font-black text-slate-600 text-xs sm:text-sm">${tile.soundWord || tile.id}</span>
+                        <i class="selection-check fa-solid fa-circle-check text-sky-500 ${checked ? '' : 'hidden'}"></i>
+                    </div>
+                `;
+
+                const checkbox = label.querySelector('input');
+                checkbox.addEventListener('change', () => {
+                    const current = getPendingIds();
+                    if (checkbox.checked) current.add(tile.id);
+                    else current.delete(tile.id);
+                    updateWordChoiceVisual(label, checkbox.checked);
+                });
+                wordSelectionGrid.appendChild(label);
+            });
+        }
+
+        function updateWordChoiceVisual(label, checked) {
+            const card = label.querySelector('.word-choice');
+            const check = label.querySelector('.selection-check');
+            card.classList.toggle('border-sky-400', checked);
+            card.classList.toggle('ring-4', checked);
+            card.classList.toggle('ring-sky-100', checked);
+            card.classList.toggle('border-slate-200', !checked);
+            card.classList.toggle('opacity-55', !checked);
+            check.classList.toggle('hidden', !checked);
+        }
+
+        editFamilyCategoryBtn.addEventListener('click', () => {
+            editCategory = 'family';
+            updateEditCategoryButtons();
+            renderWordSelection();
+        });
+
+        editOtherCategoryBtn.addEventListener('click', () => {
+            editCategory = 'others';
+            updateEditCategoryButtons();
+            renderWordSelection();
+        });
+
+        editWordsBtn.addEventListener('click', openWordEditor);
+        closeEditWordsBtn.addEventListener('click', closeWordEditor);
+        cancelEditWordsBtn.addEventListener('click', closeWordEditor);
+
+        selectAllWordsBtn.addEventListener('click', () => {
+            setPendingIds(new Set(getEditorTiles().map(tile => tile.id)));
+            renderWordSelection();
+        });
+
+        saveEditWordsBtn.addEventListener('click', () => {
+            if (pendingFamilyIds.size === 0) pendingFamilyIds = new Set(FAMILY_TILES.map(tile => tile.id));
+            if (pendingWordIds.size === 0) pendingWordIds = new Set(OTHER_TILES.map(tile => tile.id));
+
+            selectedFamilyIds = new Set(pendingFamilyIds);
+            selectedWordIds = new Set(pendingWordIds);
+
+            saveSelectedIds(FAMILY_CACHE_KEY, selectedFamilyIds);
+            saveSelectedIds(WORDS_CACHE_KEY, selectedWordIds);
+
+            renderSelectedFamilyTiles();
+            renderSelectedOtherTiles();
+            closeWordEditor();
+        });
+
+        fullscreenBtn.addEventListener('click', async () => {
+            try {
+                if (!document.fullscreenElement) await document.documentElement.requestFullscreen();
+                else await document.exitFullscreen();
+            } catch (error) {}
+        });
+
+        function updateFullscreenIcon() {
+            const isFullscreen = !!document.fullscreenElement;
+            fullscreenIcon.className = isFullscreen ? 'fa-solid fa-compress text-lg' : 'fa-solid fa-expand text-lg';
+        }
+
+        document.addEventListener('fullscreenchange', updateFullscreenIcon);
+
+        function createBoardTile(tileInfo) {
+            const tileEl = document.createElement('div');
+            tileEl.className = `draggable-tile tile-frame rounded-2xl md:rounded-3xl border-4 ${tileInfo.color} p-2.5 bg-white flex items-center justify-center`;
+            
+            const defaultSize = window.innerWidth >= 768 ? 112 : (window.innerWidth >= 640 ? 96 : 80);
+            tileEl.style.width = `${defaultSize}px`;
+            tileEl.style.height = `${defaultSize}px`;
+
+            if (tileInfo.isLetter) {
+                const textSpan = document.createElement('span');
+                textSpan.className = "letter-tile leading-none pointer-events-none select-none flex items-center justify-center h-full w-full";
+                textSpan.style.fontSize = `${defaultSize * 0.65}px`;
+                textSpan.textContent = tileInfo.text;
+                tileEl.appendChild(textSpan);
+            } else if (tileInfo.emoji) {
+                const emoji = document.createElement('span');
+                emoji.className = "leading-none pointer-events-none flex items-center justify-center h-full w-full";
+                emoji.style.fontSize = `${defaultSize * 0.65}px`;
+                emoji.textContent = tileInfo.emoji;
+                tileEl.appendChild(emoji);
+            } else {
+                const img = document.createElement('img');
+                img.src = encodeURI(tileInfo.img);
+                img.alt = "";
+                img.className = "w-full h-full object-contain pointer-events-none";
+                img.onerror = () => {
+                    img.src = `https://placehold.co/150x150/FFD166/333333?text=?`;
+                };
+                tileEl.appendChild(img);
+            }
+
+            const removeBadge = document.createElement('button');
+            removeBadge.className = "absolute -top-2 -right-2 bg-red-500 text-white rounded-full w-6 h-6 md:w-7 md:h-7 flex items-center justify-center text-xs shadow-md border-2 border-white hover:bg-red-600 transition-transform active:scale-90 z-20";
+            removeBadge.innerHTML = `<i class="fa-solid fa-xmark"></i>`;
+            removeBadge.addEventListener('click', (e) => {
+                e.stopPropagation();
+                removeTileWithAnimation(tileEl);
+            });
+            tileEl.appendChild(removeBadge);
+
+            const resizeHandle = document.createElement('div');
+            resizeHandle.className = "resize-handle";
+            resizeHandle.innerHTML = `<i class="fa-solid fa-arrow-down-left-and-up-right-to-center rotate-90" style="font-size: 8px;"></i>`;
+            tileEl.appendChild(resizeHandle);
+
+            const rect = boardCanvas.getBoundingClientRect();
+            const padding = 20;
+            const maxX = Math.max(0, rect.width - defaultSize - padding);
+            const maxY = Math.max(0, rect.height - defaultSize - padding);
+
+            const randomX = Math.max(padding, Math.floor(Math.random() * maxX));
+            const randomY = Math.max(padding, Math.floor(Math.random() * maxY));
+
+            tileEl.style.left = `${randomX}px`;
+            tileEl.style.top = `${randomY}px`;
+            tileEl.style.zIndex = ++highestZIndex;
+
+            tileEl.addEventListener('click', (e) => {
+                if (e.target.closest('.resize-handle') || e.target.closest('button')) return;
+                if (!tileEl.dataset.isDragging || tileEl.dataset.isDragging === "false") {
+                    playTileSound(tileInfo);
+                    tileEl.style.zIndex = ++highestZIndex;
+                }
+            });
+
+            tileEl.addEventListener('dblclick', (e) => {
+                if (e.target.closest('.resize-handle') || e.target.closest('button')) return;
+                removeTileWithAnimation(tileEl);
+            });
+
+            makeTileDraggableAndResizable(tileEl, resizeHandle);
+            boardCanvas.appendChild(tileEl);
+        }
+
+        function makeTileDraggableAndResizable(element, resizeHandle) {
+            let isDragging = false;
+            let isResizing = false;
+            let startX = 0, startY = 0;
+            let startWidth = 0, startHeight = 0;
+            let xOffset = 0, yOffset = 0;
+
+            element.addEventListener('mousedown', dragStart);
+            element.addEventListener('touchstart', dragStart, { passive: false });
+
+            resizeHandle.addEventListener('mousedown', resizeStart);
+            resizeHandle.addEventListener('touchstart', resizeStart, { passive: false });
+
+            window.addEventListener('mousemove', handleMove);
+            window.addEventListener('touchmove', handleMove, { passive: false });
+
+            window.addEventListener('mouseup', handleEnd);
+            window.addEventListener('touchend', handleEnd);
+
+            function dragStart(e) {
+                if (e.target.closest('button') || e.target.closest('.resize-handle')) return;
+                element.style.zIndex = ++highestZIndex;
+                element.dataset.isDragging = "false";
+
+                const clientX = e.type === "touchstart" ? e.touches[0].clientX : e.clientX;
+                const clientY = e.type === "touchstart" ? e.touches[0].clientY : e.clientY;
+                const rect = element.getBoundingClientRect();
+                xOffset = clientX - rect.left;
+                yOffset = clientY - rect.top;
+
+                isDragging = true;
+            }
+
+            function resizeStart(e) {
+                e.stopPropagation();
+                e.preventDefault();
+                element.style.zIndex = ++highestZIndex;
+
+                const clientX = e.type === "touchstart" ? e.touches[0].clientX : e.clientX;
+                const clientY = e.type === "touchstart" ? e.touches[0].clientY : e.clientY;
+
+                startX = clientX;
+                startY = clientY;
+                startWidth = parseInt(document.defaultView.getComputedStyle(element).width, 10);
+                startHeight = parseInt(document.defaultView.getComputedStyle(element).height, 10);
+
+                isResizing = true;
+            }
+
+            function handleMove(e) {
+                if (isResizing) {
+                    e.preventDefault();
+                    const clientX = e.type === "touchmove" ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.type === "touchmove" ? e.touches[0].clientY : e.clientY;
+
+                    const delta = Math.max(clientX - startX, clientY - startY);
+                    const newWidth = Math.max(60, startWidth + delta);
+                    const newHeight = Math.max(60, startHeight + delta);
+
+                    element.style.width = `${newWidth}px`;
+                    element.style.height = `${newHeight}px`;
+
+                    const textSpan = element.querySelector('.letter-tile');
+                    if (textSpan) textSpan.style.fontSize = `${newWidth * 0.65}px`;
+                    return;
+                }
+
+                if (isDragging) {
+                    e.preventDefault();
+                    element.dataset.isDragging = "true";
+
+                    const clientX = e.type === "touchmove" ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.type === "touchmove" ? e.touches[0].clientY : e.clientY;
+                    const canvasRect = boardCanvas.getBoundingClientRect();
+                    
+                    let left = clientX - canvasRect.left - xOffset;
+                    let top = clientY - canvasRect.top - yOffset;
+
+                    left = Math.max(0, Math.min(left, canvasRect.width - element.offsetWidth));
+                    top = Math.max(0, Math.min(top, canvasRect.height - element.offsetHeight));
+
+                    element.style.left = `${left}px`;
+                    element.style.top = `${top}px`;
+
+                    const trashRect = trashZone.getBoundingClientRect();
+                    const tileRect = element.getBoundingClientRect();
+
+                    if (isOverlapping(tileRect, trashRect)) trashZone.classList.add('drag-over');
+                    else trashZone.classList.remove('drag-over');
+                }
+            }
+
+            function handleEnd() {
+                if (isResizing) {
+                    isResizing = false;
+                    return;
+                }
+
+                if (isDragging) {
+                    isDragging = false;
+                    const trashRect = trashZone.getBoundingClientRect();
+                    const tileRect = element.getBoundingClientRect();
+
+                    if (isOverlapping(tileRect, trashRect)) removeTileWithAnimation(element);
+                    trashZone.classList.remove('drag-over');
+
+                    setTimeout(() => { element.dataset.isDragging = "false"; }, 50);
+                }
+            }
+        }
+
+        function isOverlapping(rect1, rect2) {
+            return !(
+                rect1.right < rect2.left ||
+                rect1.left > rect2.right ||
+                rect1.bottom < rect2.top ||
+                rect1.top > rect2.bottom
+            );
+        }
+
+        function removeTileWithAnimation(element) {
+            const anim = element.animate([
+                { transform: 'scale(1)', opacity: 1 },
+                { transform: 'scale(0) rotate(20deg)', opacity: 0 }
+            ], { duration: 200, easing: 'ease-in' });
+
+            anim.onfinish = () => element.remove();
+        }
+
+        clearBoardBtn.addEventListener('click', () => {
+            const tiles = boardCanvas.querySelectorAll('.draggable-tile');
+            tiles.forEach((tile, index) => {
+                setTimeout(() => { removeTileWithAnimation(tile); }, index * 30);
+            });
+        });
+
+        // ================= QUIZ LOGIC ================= //
+
+        function openQuizModal() {
+            quizCategoryState.classList.remove('hidden');
+            quizActiveState.classList.add('hidden');
+            quizResultState.classList.add('hidden');
+            quizOverlay.classList.remove('hidden');
+        }
+
+        function selectQuizCategory(categoryKey) {
+            selectedCategoryPool = (categoryKey === 'family'
+                ? FAMILY_TILES.filter(tile => selectedFamilyIds.has(tile.id))
+                : OTHER_TILES.filter(tile => selectedWordIds.has(tile.id)))
+                .filter(tile => tile.soundWord !== '' || tile.audioSrc || tile.isPunctuation);
+            
+            if (selectedCategoryPool.length < 3) {
+                alert('Please select at least 3 tiles in settings for Quiz Mode.');
+                return;
+            }
+
+            const targetLength = Math.min(selectedQuizLength, selectedCategoryPool.length);
+            quizQueue = [...selectedCategoryPool].sort(() => 0.5 - Math.random()).slice(0, targetLength);
+            totalOriginalQuestions = quizQueue.length;
+
+            quizCategoryState.classList.add('hidden');
+            quizActiveState.classList.remove('hidden');
+
+            loadQuizQuestion();
+        }
+
+        function loadQuizQuestion() {
+            if (quizQueue.length === 0) {
+                showQuizResults();
+                return;
+            }
+
+            isAnswerProcessing = false;
+            currentTargetTile = quizQueue[0];
+
+            quizRemainingText.textContent = `${quizQueue.length} Tile${quizQueue.length > 1 ? 's' : ''} Left`;
+
+            const distractors = selectedCategoryPool
+                .filter(tile => tile.id !== currentTargetTile.id)
+                .sort(() => 0.5 - Math.random())
+                .slice(0, 2);
+
+            const choices = [currentTargetTile, ...distractors].sort(() => 0.5 - Math.random());
+
+            quizChoicesContainer.innerHTML = '';
+            choices.forEach(choice => {
+                const choiceBtn = document.createElement('button');
+                choiceBtn.className = `tile-frame relative overflow-hidden w-full aspect-square rounded-2xl border-4 ${choice.color} p-2 bg-white flex items-center justify-center active:scale-95 transition-transform`;
+                
+                if (choice.isLetter) {
+                    const textSpan = document.createElement('span');
+                    textSpan.className = "letter-tile text-4xl sm:text-5xl md:text-6xl leading-none pointer-events-none select-none";
+                    textSpan.textContent = choice.text;
+                    choiceBtn.appendChild(textSpan);
+                } else if (choice.emoji) {
+                    const emoji = document.createElement('span');
+                    emoji.className = "text-5xl md:text-6xl leading-none pointer-events-none";
+                    emoji.textContent = choice.emoji;
+                    choiceBtn.appendChild(emoji);
+                } else {
+                    const img = document.createElement('img');
+                    img.src = encodeURI(choice.img);
+                    img.alt = "";
+                    img.className = "w-full h-full object-contain pointer-events-none";
+                    img.onerror = () => {
+                        img.src = `https://placehold.co/150x150/FFD166/333333?text=?`;
+                    };
+                    choiceBtn.appendChild(img);
+                }
+
+                choiceBtn.addEventListener('click', () => handleQuizAnswer(choice, choiceBtn));
+                quizChoicesContainer.appendChild(choiceBtn);
+            });
+
+            setTimeout(() => { playTileSound(currentTargetTile); }, 300);
+        }
+
+        function handleQuizAnswer(selectedTile, buttonEl) {
+            if (isAnswerProcessing) return;
+            isAnswerProcessing = true;
+
+            if (selectedTile.id === currentTargetTile.id) {
+                buttonEl.classList.add('ring-8', 'ring-emerald-400', 'bg-emerald-50');
+                playTileSound(selectedTile);
+
+                setTimeout(() => {
+                    quizQueue.shift();
+                    loadQuizQuestion();
+                }, 800);
+            } else {
+                buttonEl.classList.add('animate-shake', 'ring-4', 'ring-red-400');
+                
+                const xOverlay = document.createElement('div');
+                xOverlay.className = 'absolute inset-0 bg-red-500/80 flex items-center justify-center text-white text-5xl md:text-6xl font-black z-10 animate-fade-in';
+                xOverlay.innerHTML = '<i class="fa-solid fa-xmark"></i>';
+                buttonEl.appendChild(xOverlay);
+
+                playTileSound(selectedTile);
+
+                setTimeout(() => {
+                    const missedTile = quizQueue.shift();
+                    quizQueue.push(missedTile);
+                    loadQuizQuestion();
+                }, 1000);
+            }
+        }
+
+        function showQuizResults() {
+            quizActiveState.classList.add('hidden');
+            quizResultState.classList.remove('hidden');
+            quizScoreText.textContent = `Awesome job! You answered all ${totalOriginalQuestions} tiles correctly!`;
+        }
+
+        playQuizSoundBtn.addEventListener('click', () => {
+            if (currentTargetTile) playTileSound(currentTargetTile);
+        });
+
+        quizToggleBtn.addEventListener('click', openQuizModal);
+        restartQuizBtn.addEventListener('click', openQuizModal);
+        closeQuizBtn.addEventListener('click', () => quizOverlay.classList.add('hidden'));
+    </script>
+</body>
+</html>
